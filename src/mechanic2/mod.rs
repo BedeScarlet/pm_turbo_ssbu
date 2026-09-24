@@ -9,20 +9,26 @@ use {
     },
     smash_script::*,
     smashline::{*, Priority::*},
-    bitflags::bitflags,
 };
 
 pub unsafe extern "C" fn turbo_mode(fighter: &mut L2CFighterCommon) {
 
     let boma = fighter.module_accessor;
 
-    let is_hitstop = StopModule::is_stop(boma);
+    let if_hitlag: bool;
+    let hitlag_frame = WorkModule::get_int(boma, *FIGHTER_INSTANCE_WORK_ID_INT_HIT_STOP_ATTACK_SUSPEND_FRAME);
+    if hitlag_frame > 0 {
+        if_hitlag = true;
+    } else {
+        if_hitlag = false
+    }
+
     let status_kind = StatusModule::status_kind(boma);
     let motion_kind = MotionModule::motion_kind(boma);
     let aerial_kind = ControlModule::get_attack_air_kind(boma);
 
     if CancelModule::is_enable_cancel(boma) 
-        || is_hitstop 
+        || if_hitlag 
         || !AttackModule::is_infliction_status(boma, *COLLISION_KIND_MASK_HIT | *COLLISION_KIND_MASK_SHIELD) {
             return;
     }
