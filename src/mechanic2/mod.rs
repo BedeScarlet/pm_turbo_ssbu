@@ -11,45 +11,16 @@ use {
     smashline::{*, Priority::*},
 };
 
-unsafe fn allow_jumpcancel(fighter: &mut L2CFighterCommon) {
-    let boma = fighter.module_accessor;
-    let command_kind1 = ControlModule::get_command_flag_cat(boma, 0);
-    let jump_count = WorkModule::get_int(boma, *FIGHTER_INSTANCE_WORK_ID_INT_JUMP_COUNT);
-    let jump_count_max = WorkModule::get_int(boma,*FIGHTER_INSTANCE_WORK_ID_INT_JUMP_COUNT_MAX);
-
-    if ControlModule::check_button_on(boma, *CONTROL_PAD_BUTTON_JUMP) || ControlModule::check_button_on(boma, *CONTROL_PAD_BUTTON_FLICK_JUMP) {
-        if StatusModule::situation_kind(boma) == SITUATION_KIND_AIR 
-        && jump_count < jump_count_max {
-            StatusModule::change_status_request_from_script(boma, *FIGHTER_STATUS_KIND_JUMP_AERIAL, false);
-        } else if StatusModule::situation_kind(boma) == SITUATION_KIND_GROUND && StatusModule::status_kind(boma) != *FIGHTER_STATUS_KIND_JUMP_SQUAT{
-            StatusModule::change_status_request_from_script(boma, *FIGHTER_STATUS_KIND_JUMP_SQUAT, false);
-        }
-    }
-}
-
 unsafe fn allow_grabcancel(fighter: &mut L2CFighterCommon) {
     let boma = fighter.module_accessor;
     let command_kind1 = ControlModule::get_command_flag_cat(boma, 0);
 
-    if (command_kind1 & *FIGHTER_PAD_CMD_CAT1_FLAG_CATCH) != 0 {
-        if StatusModule::situation_kind(boma) == SITUATION_KIND_GROUND {
+    if StatusModule::situation_kind(boma) == SITUATION_KIND_GROUND {
+        if ControlModule::check_button_on(boma, *CONTROL_PAD_BUTTON_CATCH) {
             StatusModule::change_status_request_from_script(boma, *FIGHTER_STATUS_KIND_CATCH, false);
         }
     }
-}
-
-unsafe fn allow_move(fighter: &mut L2CFighterCommon) {
-    let boma = fighter.module_accessor;
-    let command_kind1 = ControlModule::get_command_flag_cat(boma, 0);
-
-    if StatusModule::situation_kind(boma) == SITUATION_KIND_GROUND {
-        if (command_kind1 & *FIGHTER_PAD_CMD_CAT1_FLAG_WALK) != 0 {
-            StatusModule::change_status_request_from_script(boma, *FIGHTER_STATUS_KIND_WALK, false);
-        }
-        if (command_kind1 & *FIGHTER_PAD_CMD_CAT1_FLAG_DASH) != 0 {
-            StatusModule::change_status_request_from_script(boma, *FIGHTER_STATUS_KIND_DASH, false);
-        }
-    }
+    
 }
 
 pub unsafe extern "C" fn turbo_mode(fighter: &mut L2CFighterCommon) {
@@ -70,14 +41,35 @@ pub unsafe extern "C" fn turbo_mode(fighter: &mut L2CFighterCommon) {
     let command_kind1 = ControlModule::get_command_flag_cat(boma, 0);
 
     if if_hitlag 
+    || CancelModule::is_enable_cancel(boma)
     || !AttackModule::is_infliction_status(boma, *COLLISION_KIND_MASK_HIT | *COLLISION_KIND_MASK_SHIELD) {
         return;
     }
 
+    if [
+        *FIGHTER_STATUS_KIND_SPECIAL_N,
+        *FIGHTER_STATUS_KIND_SPECIAL_S,
+        *FIGHTER_STATUS_KIND_SPECIAL_HI,
+        *FIGHTER_STATUS_KIND_SPECIAL_LW,
+        *FIGHTER_STATUS_KIND_ATTACK_S3,
+        *FIGHTER_STATUS_KIND_ATTACK_HI3,
+        *FIGHTER_STATUS_KIND_ATTACK_LW3,
+        *FIGHTER_STATUS_KIND_ATTACK_S4,
+        *FIGHTER_STATUS_KIND_ATTACK_HI4,
+        *FIGHTER_STATUS_KIND_ATTACK_LW4,
+        *FIGHTER_STATUS_KIND_ATTACK_AIR,
+        *FIGHTER_STATUS_KIND_ATTACK
+        ].contains(&status_kind) {
+        WorkModule::enable_transition_term(boma, *FIGHTER_STATUS_TRANSITION_TERM_ID_CONT_JUMP_SQUAT);
+        WorkModule::enable_transition_term(boma, *FIGHTER_STATUS_TRANSITION_TERM_ID_CONT_JUMP_SQUAT_BUTTON);
+        WorkModule::enable_transition_term(boma, *FIGHTER_STATUS_TRANSITION_TERM_ID_CONT_JUMP_AERIAL);
+        WorkModule::enable_transition_term(boma, *FIGHTER_STATUS_TRANSITION_TERM_ID_CONT_JUMP_AERIAL_BUTTON);
+        fighter.sub_transition_group_check_ground_jump();
+        fighter.sub_transition_group_check_air_jump_aerial();
+    }
     // Air Moves
-    // todo: account for multipart aerials (sora, bayo)
+    // todo: account for multipart aerials (sora, not bayo though idk why)
     if StatusModule::situation_kind(boma) == SITUATION_KIND_AIR {
-        allow_jumpcancel(fighter);
         if (aerial_kind == *FIGHTER_COMMAND_ATTACK_AIR_KIND_N && motion_kind != smash::hash40("attack_air_n"))
         || (aerial_kind == *FIGHTER_COMMAND_ATTACK_AIR_KIND_F && motion_kind != smash::hash40("attack_air_f"))
         || (aerial_kind == *FIGHTER_COMMAND_ATTACK_AIR_KIND_B && motion_kind != smash::hash40("attack_air_b"))
@@ -85,19 +77,36 @@ pub unsafe extern "C" fn turbo_mode(fighter: &mut L2CFighterCommon) {
         || (aerial_kind == *FIGHTER_COMMAND_ATTACK_AIR_KIND_LW && motion_kind != smash::hash40("attack_air_lw")) {
             StatusModule::change_status_request_from_script(boma, *FIGHTER_STATUS_KIND_ATTACK_AIR, false);
         }
+        if (command_kind1 & *FIGHTER_PAD_CMD_CAT1_FLAG_SPECIAL_N) != 0 {
+            if status_kind != *FIGHTER_STATUS_KIND_SPECIAL_N {
+                StatusModule::change_status_request_from_script(boma, *FIGHTER_STATUS_KIND_SPECIAL_N, false);
+            }
+        }
+        if (command_kind1 & *FIGHTER_PAD_CMD_CAT1_FLAG_SPECIAL_S) != 0 {
+            if status_kind != *FIGHTER_STATUS_KIND_SPECIAL_S {
+                StatusModule::change_status_request_from_script(boma, *FIGHTER_STATUS_KIND_SPECIAL_S, false);
+            }
+        }
+        if (command_kind1 & *FIGHTER_PAD_CMD_CAT1_FLAG_SPECIAL_HI) != 0 {
+            if status_kind != *FIGHTER_STATUS_KIND_SPECIAL_HI {
+                StatusModule::change_status_request_from_script(boma, *FIGHTER_STATUS_KIND_SPECIAL_HI, false);
+            }
+        }
+        if (command_kind1 & *FIGHTER_PAD_CMD_CAT1_FLAG_SPECIAL_LW) != 0 {
+            if status_kind != *FIGHTER_STATUS_KIND_SPECIAL_LW {
+                StatusModule::change_status_request_from_script(boma, *FIGHTER_STATUS_KIND_SPECIAL_LW, false);
+            }
+        }
     }
 
     // Ground Moves
     if StatusModule::situation_kind(boma) == SITUATION_KIND_GROUND {
-        allow_grabcancel(fighter);
-        // if (command_kind1 & *FIGHTER_PAD_CMD_CAT1_FLAG_ATTACK_N) != 0 {
-        //     // this command flag genuinely runs anytime you use a move with the A button
-        //     allow_jumpcancel(fighter);
-        //     if status_kind != *FIGHTER_STATUS_KIND_ATTACK {
-        //         allow_move(fighter);
-        //         StatusModule::change_status_request_from_script(boma, *FIGHTER_STATUS_KIND_ATTACK, false);
-        //     }
-        // }
+        if (command_kind1 & *FIGHTER_PAD_CMD_CAT1_FLAG_ATTACK_N) != 0 {
+            // this command flag genuinely runs anytime you use a move with the A button. i think
+            if status_kind != *FIGHTER_STATUS_KIND_ATTACK {
+                StatusModule::change_status_request_from_script(boma, *FIGHTER_STATUS_KIND_ATTACK, false);
+            }
+        }
          
         /*  
             Dash attack cancels into walk if the input is held. letting it cancel into itself isn't really a problem.
@@ -106,60 +115,53 @@ pub unsafe extern "C" fn turbo_mode(fighter: &mut L2CFighterCommon) {
         if status_kind == *FIGHTER_STATUS_KIND_ATTACK_DASH {
             CancelModule::enable_cancel(boma);
         }
-        
+
         if (command_kind1 & *FIGHTER_PAD_CMD_CAT1_FLAG_ATTACK_S3) != 0 {
-            allow_jumpcancel(fighter);
             if status_kind != *FIGHTER_STATUS_KIND_ATTACK_S3 {
                 StatusModule::change_status_request_from_script(boma, *FIGHTER_STATUS_KIND_ATTACK_S3, false);
             }
         }
         if (command_kind1 & *FIGHTER_PAD_CMD_CAT1_FLAG_ATTACK_HI3) != 0 {
-            allow_jumpcancel(fighter);
             if status_kind != *FIGHTER_STATUS_KIND_ATTACK_HI3 {
                 StatusModule::change_status_request_from_script(boma, *FIGHTER_STATUS_KIND_ATTACK_HI3, false);
             }
         }
         if (command_kind1 & *FIGHTER_PAD_CMD_CAT1_FLAG_ATTACK_LW3) != 0 {
-            allow_jumpcancel(fighter);
             if status_kind != *FIGHTER_STATUS_KIND_ATTACK_LW3 {
                 StatusModule::change_status_request_from_script(boma, *FIGHTER_STATUS_KIND_ATTACK_LW3, false);
             }
         }
         if (command_kind1 & *FIGHTER_PAD_CMD_CAT1_FLAG_ATTACK_S4) != 0 {
             if status_kind != *FIGHTER_STATUS_KIND_ATTACK_S4 {
-                StatusModule::change_status_request_from_script(boma, *FIGHTER_STATUS_KIND_ATTACK_S4_HOLD, false);
+                StatusModule::change_status_request_from_script(boma, *FIGHTER_STATUS_KIND_ATTACK_S4_START, false);
             }
         }
         if (command_kind1 & *FIGHTER_PAD_CMD_CAT1_FLAG_ATTACK_HI4) != 0 {
             if status_kind != *FIGHTER_STATUS_KIND_ATTACK_HI4 {
-                StatusModule::change_status_request_from_script(boma, *FIGHTER_STATUS_KIND_ATTACK_HI4_HOLD, false);
+                StatusModule::change_status_request_from_script(boma, *FIGHTER_STATUS_KIND_ATTACK_HI4_START, false);
             }
         }
         if (command_kind1 & *FIGHTER_PAD_CMD_CAT1_FLAG_ATTACK_LW4) != 0 {
             if status_kind != *FIGHTER_STATUS_KIND_ATTACK_LW4 {
-                StatusModule::change_status_request_from_script(boma, *FIGHTER_STATUS_KIND_ATTACK_LW4_HOLD, false);
+                StatusModule::change_status_request_from_script(boma, *FIGHTER_STATUS_KIND_ATTACK_LW4_START, false);
             }
         }
         if (command_kind1 & *FIGHTER_PAD_CMD_CAT1_FLAG_SPECIAL_N) != 0 {
-            allow_jumpcancel(fighter);
             if status_kind != *FIGHTER_STATUS_KIND_SPECIAL_N {
                 StatusModule::change_status_request_from_script(boma, *FIGHTER_STATUS_KIND_SPECIAL_N, false);
             }
         }
         if (command_kind1 & *FIGHTER_PAD_CMD_CAT1_FLAG_SPECIAL_S) != 0 {
-            allow_jumpcancel(fighter);
             if status_kind != *FIGHTER_STATUS_KIND_SPECIAL_S {
                 StatusModule::change_status_request_from_script(boma, *FIGHTER_STATUS_KIND_SPECIAL_S, false);
             }
         }
         if (command_kind1 & *FIGHTER_PAD_CMD_CAT1_FLAG_SPECIAL_HI) != 0 {
-            allow_jumpcancel(fighter);
             if status_kind != *FIGHTER_STATUS_KIND_SPECIAL_HI {
                 StatusModule::change_status_request_from_script(boma, *FIGHTER_STATUS_KIND_SPECIAL_HI, false);
             }
         }
         if (command_kind1 & *FIGHTER_PAD_CMD_CAT1_FLAG_SPECIAL_LW) != 0 {
-            allow_jumpcancel(fighter);
             if status_kind != *FIGHTER_STATUS_KIND_SPECIAL_LW {
                 StatusModule::change_status_request_from_script(boma, *FIGHTER_STATUS_KIND_SPECIAL_LW, false);
             }
