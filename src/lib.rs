@@ -12,9 +12,10 @@
     clippy::borrow_interior_mutable_const
 )]
 
-mod mechanic;
+mod common;
+mod func;
 
 #[skyline::main(name = "pluginturbo")]
 pub fn main() {
-	mechanic::install();
+	common::install();
 }

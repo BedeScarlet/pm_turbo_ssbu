@@ -9,50 +9,10 @@ use {
     },
     smash_script::*,
     smashline::{*, Priority::*},
+    crate::func::*
 };
 
-unsafe fn allow_grabcancel(fighter: &mut L2CFighterCommon) {
-    let boma = fighter.module_accessor;
-    if StatusModule::situation_kind(boma) == SITUATION_KIND_GROUND {
-        if ControlModule::check_button_on(boma, *CONTROL_PAD_BUTTON_CATCH) {
-            StatusModule::change_status_request_from_script(boma, *FIGHTER_STATUS_KIND_CATCH, false);
-        }
-    }
-    
-}
-
-
 pub unsafe extern "C" fn turbo_mode(fighter: &mut L2CFighterCommon) {
-
-    unsafe fn is_sticktilt(fighter: &mut L2CFighterCommon) -> bool {
-        let boma = fighter.module_accessor;
-        let command_kind1 = ControlModule::get_command_flag_cat(boma, 0);
-        let stick_x = ControlModule::get_stick_x(boma);
-        let stick_y = ControlModule::get_stick_y(boma);
-        let s3_val = WorkModule::get_param_float(boma, hash40("common"), hash40("attack_s3_stick_x"));
-        let hi3_val = WorkModule::get_param_float(boma, hash40("common"), hash40("attack_hi3_stick_y"));
-        let lw3_val = WorkModule::get_param_float(boma, hash40("common"), hash40("attack_lw3_stick_y"));
-
-        if stick_x >= s3_val || stick_y >= hi3_val || stick_y <= lw3_val {
-            return true;
-        }
-        return false;
-    }
-
-    unsafe fn is_sub_sticktilt(fighter: &mut L2CFighterCommon) -> bool {
-        let boma = fighter.module_accessor;
-        let command_kind1 = ControlModule::get_command_flag_cat(boma, 0);
-        let stick_x = ControlModule::get_sub_stick_x(boma);
-        let stick_y = ControlModule::get_sub_stick_y(boma);
-        let s3_val = WorkModule::get_param_float(boma, hash40("common"), hash40("attack_s3_stick_x"));
-        let hi3_val = WorkModule::get_param_float(boma, hash40("common"), hash40("attack_hi3_stick_y"));
-        let lw3_val = WorkModule::get_param_float(boma, hash40("common"), hash40("attack_lw3_stick_y"));
-
-        if stick_x >= s3_val || stick_y >= hi3_val || stick_y <= lw3_val {
-            return true;
-        }
-        return false;
-    }
 
     let boma = fighter.module_accessor;
 
@@ -133,7 +93,7 @@ pub unsafe extern "C" fn turbo_mode(fighter: &mut L2CFighterCommon) {
         allow_grabcancel(fighter);
         if (command_kind1 & *FIGHTER_PAD_CMD_CAT1_FLAG_ATTACK_N) != 0 {
             // this command flag genuinely runs anytime you use a move with the A button. i think
-            if status_kind != *FIGHTER_STATUS_KIND_ATTACK && !is_sticktilt(fighter) && !is_sub_sticktilt(fighter){
+            if status_kind != *FIGHTER_STATUS_KIND_ATTACK && status_kind != *FIGHTER_STATUS_KIND_CATCH_ATTACK && !is_sticktilt(fighter) && !is_sub_sticktilt(fighter){
                 StatusModule::change_status_request_from_script(boma, *FIGHTER_STATUS_KIND_ATTACK, false);
             }
         }
